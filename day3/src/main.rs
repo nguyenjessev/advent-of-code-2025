@@ -1,3 +1,4 @@
+use itertools::join;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
@@ -15,9 +16,9 @@ fn main() -> io::Result<()> {
         let digits = convert_string_to_digits(line);
         let highest_digits = find_highest_digits(&digits, NUMBER_OF_DIGITS);
 
-        for (i, digit) in highest_digits.iter().enumerate() {
-            sum += *digit as u64 * 10_u64.pow((NUMBER_OF_DIGITS - i - 1) as u32)
-        }
+        let sum_string = join(highest_digits.iter(), "");
+
+        sum += sum_string.parse::<u64>().unwrap();
     }
 
     println!("{}", sum);
