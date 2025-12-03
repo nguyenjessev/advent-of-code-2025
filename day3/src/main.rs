@@ -12,7 +12,7 @@ fn main() -> io::Result<()> {
 
     for line in reader.lines() {
         let line = line?;
-        let digits = convert_string_to_digits(&line);
+        let digits = convert_string_to_digits(line);
         let highest_digits = find_highest_digits(&digits, NUMBER_OF_DIGITS);
 
         for (i, digit) in highest_digits.iter().enumerate() {
@@ -25,7 +25,7 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn convert_string_to_digits(s: &String) -> Vec<u8> {
+fn convert_string_to_digits(s: String) -> Vec<u8> {
     s.bytes().map(|b| b - b'0').collect()
 }
 
