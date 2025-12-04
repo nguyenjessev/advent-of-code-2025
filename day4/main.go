@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	maxNeighbors     = 4
 	occupiedSymbol   = '@'
 	unoccupiedSymbol = '.'
 
@@ -23,22 +24,9 @@ func main() {
 
 	lines := readFile(file)
 
-	removableRolls := true
 	removedRollCount := 0
 
-	for removableRolls {
-		removableRolls = false
-
-		for y, line := range lines {
-			for x := range line {
-				if lines[y][x] == occupiedSymbol && occupiedNeighbors(lines, x, y) < 4 {
-					lines = removeRoll(lines, x, y)
-					removableRolls = true
-					removedRollCount++
-				}
-			}
-		}
-	}
+	_, removedRollCount = removeAllRolls(lines, 0)
 
 	fmt.Println(removedRollCount)
 }
@@ -76,6 +64,31 @@ func readFile(f io.Reader) []string {
 	}
 
 	return lines
+}
+
+func removeAllRolls(lines []string, totalRemovedRolls int) ([]string, int) {
+	newLines, rollsRemoved := removeMultipleRolls(lines)
+
+	if rollsRemoved == 0 {
+		return newLines, totalRemovedRolls
+	}
+
+	return removeAllRolls(newLines, totalRemovedRolls+rollsRemoved)
+}
+
+func removeMultipleRolls(lines []string) ([]string, int) {
+	removedRollCount := 0
+
+	for y, line := range lines {
+		for x := range line {
+			if lines[y][x] == occupiedSymbol && occupiedNeighbors(lines, x, y) < maxNeighbors {
+				lines = removeRoll(lines, x, y)
+				removedRollCount++
+			}
+		}
+	}
+
+	return lines, removedRollCount
 }
 
 func removeRoll(lines []string, x int, y int) []string {

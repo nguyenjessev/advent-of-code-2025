@@ -115,3 +115,20 @@ func TestRemoveRoll(t *testing.T) {
 		t.Errorf("got %v want %v", lines, wantLines)
 	}
 }
+
+func TestRemoveMultipleRolls(t *testing.T) {
+	contents := bytes.NewBufferString(`..@@.@@@@.
+@@@.@.@.@@
+@@@@@.@.@@`)
+	lines := readFile(contents)
+	want := bytes.NewBufferString(`..........
+.@@.......
+..........`)
+	wantLines := readFile(want)
+
+	lines, _ = removeMultipleRolls(lines)
+
+	if !slices.Equal(lines, wantLines) {
+		t.Errorf("got %v want %v", lines, wantLines)
+	}
+}
