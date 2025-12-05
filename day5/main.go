@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -27,29 +28,30 @@ type ingredientRange struct {
 }
 
 func countAllValidIngredients(freshRanges []ingredientRange) int {
-	cleanedRanges := []ingredientRange{}
-
-	for _, freshRange := range freshRanges {
-		for _, existingRange := range cleanedRanges {
-			if freshRange.start >= existingRange.start && freshRange.start <= existingRange.end {
-				freshRange.start = existingRange.end + 1
-			}
-
-			if freshRange.end >= existingRange.start && freshRange.end <= existingRange.end {
-				freshRange.end = existingRange.start - 1
-			}
+	sort.Slice(freshRanges, func(i, j int) bool {
+		if freshRanges[i].start == freshRanges[j].start {
+			return freshRanges[i].end < freshRanges[j].end
 		}
+		return freshRanges[i].start < freshRanges[j].start
+	})
 
-		cleanedRanges = append(cleanedRanges, freshRange)
-	}
+	merged := []ingredientRange{freshRanges[0]}
+	for _, current := range freshRanges[1:] {
+		last := &merged[len(merged)-1]
 
-	sum := 0
+		if current.start <= last.end+1 {
+			if current.end > last.end {
+				last.end = current.end
+			}
 
-	for _, cleanedRange := range cleanedRanges {
-		if cleanedRange.start > cleanedRange.end {
 			continue
 		}
 
+		merged = append(merged, current)
+	}
+
+	sum := 0
+	for _, cleanedRange := range merged {
 		sum += cleanedRange.end - cleanedRange.start + 1
 	}
 
