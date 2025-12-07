@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strings"
 )
 
@@ -22,48 +21,42 @@ func main() {
 }
 
 func countSplits(lines []string) (int, int) {
-	beamMap := make(map[int]struct{})
-	var beamLog []int
+	beamMap := make(map[int]int, 0)
 	startingIndex := strings.Index(lines[0], "S")
-	beamMap[startingIndex] = struct{}{}
-	beamLog = append(beamLog, startingIndex)
+	beamMap[startingIndex] = 1
 	splitCount := 0
 
 	for _, line := range lines[1 : len(lines)-1] {
-		var newBeamLog []int
+		if !strings.Contains(line, "^") {
+			continue
+		}
 
-		for i, char := range line {
-			if char == '^' {
-				for _, beam := range beamLog {
-					if beam == i {
-						newBeamLog = append(newBeamLog, i-1)
-						newBeamLog = append(newBeamLog, i+1)
-					}
-				}
+		fmt.Println(line)
 
-				if _, ok := beamMap[i]; ok {
-					splitCount++
-					beamMap[i-1] = struct{}{}
-					beamMap[i+1] = struct{}{}
-					delete(beamMap, i)
-				}
+		newBeamMap := make(map[int]int, 0)
+
+		for i := range beamMap {
+			if line[i] == '^' {
+				splitCount++
+
+				newBeamMap[i-1] += beamMap[i]
+				newBeamMap[i+1] += beamMap[i]
 			} else {
-				for _, beam := range beamLog {
-					if beam == i {
-						newBeamLog = append(newBeamLog, beam)
-					}
-				}
+				newBeamMap[i] += beamMap[i]
 			}
 		}
 
-		if strings.Contains(line, "^") {
-			beamLog = slices.Clone(newBeamLog)
+		beamMap = newBeamMap
 
-			fmt.Println(line)
-		}
+		fmt.Println(line)
 	}
 
-	return splitCount, len(beamLog)
+	universeCount := 0
+	for _, value := range beamMap {
+		universeCount += value
+	}
+
+	return splitCount, universeCount
 }
 
 func readLines(r io.Reader) []string {
