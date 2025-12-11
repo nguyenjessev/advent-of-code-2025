@@ -1,0 +1,13 @@
+svr: aaa bbb
+aaa: fft
+bbb: tty
+ccc: ddd eee
+dac: fff
+ddd: hub
+eee: dac
+fff: ggg hhh
+fft: ccc
+ggg: out
+hhh: out
+hub: fff
+tty: ccc
