@@ -170,79 +170,296 @@ type joltageState struct {
 	round int
 }
 
+type frac struct {
+	num int64
+	den int64
+}
+
+// newFrac normalizes rationals so we can do exact math during row reduction.
+func newFrac(num, den int64) frac {
+	if den < 0 {
+		num = -num
+		den = -den
+	}
+	if num == 0 {
+		return frac{0, 1}
+	}
+	g := gcd(abs(num), den)
+	return frac{num / g, den / g}
+}
+
+func (f frac) isZero() bool {
+	return f.num == 0
+}
+
+func (f frac) add(g frac) frac {
+	return newFrac(f.num*g.den+g.num*f.den, f.den*g.den)
+}
+
+func (f frac) sub(g frac) frac {
+	return newFrac(f.num*g.den-g.num*f.den, f.den*g.den)
+}
+
+func (f frac) mul(g frac) frac {
+	return newFrac(f.num*g.num, f.den*g.den)
+}
+
+func (f frac) div(g frac) frac {
+	return newFrac(f.num*g.den, f.den*g.num)
+}
+
+func abs(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+func gcd(a, b int64) int64 {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+func lcm(a, b int64) int64 {
+	if a == 0 || b == 0 {
+		return 0
+	}
+	return a / gcd(a, b) * b
+}
+
+// rref performs Gauss-Jordan elimination and returns pivot columns plus consistency.
+func rref(matrix [][]frac, rhs []frac) ([][]frac, []frac, []int, bool) {
+	if len(matrix) == 0 {
+		return matrix, rhs, nil, true
+	}
+
+	m := len(matrix)
+	n := len(matrix[0])
+	pivotCols := make([]int, 0, m)
+
+	row := 0
+	for col := 0; col < n && row < m; col++ {
+		// Find a pivot row with a non-zero entry in this column.
+		pivot := -1
+		for r := row; r < m; r++ {
+			if !matrix[r][col].isZero() {
+				pivot = r
+				break
+			}
+		}
+		if pivot == -1 {
+			continue
+		}
+
+		if pivot != row {
+			matrix[row], matrix[pivot] = matrix[pivot], matrix[row]
+			rhs[row], rhs[pivot] = rhs[pivot], rhs[row]
+		}
+
+		// Normalize the pivot row and eliminate this column everywhere else.
+		pivotVal := matrix[row][col]
+		for c := 0; c < n; c++ {
+			matrix[row][c] = matrix[row][c].div(pivotVal)
+		}
+		rhs[row] = rhs[row].div(pivotVal)
+
+		for r := 0; r < m; r++ {
+			if r == row {
+				continue
+			}
+			if matrix[r][col].isZero() {
+				continue
+			}
+			factor := matrix[r][col]
+			for c := 0; c < n; c++ {
+				matrix[r][c] = matrix[r][c].sub(factor.mul(matrix[row][c]))
+			}
+			rhs[r] = rhs[r].sub(factor.mul(rhs[row]))
+		}
+
+		pivotCols = append(pivotCols, col)
+		row++
+	}
+
+	// Any zero row with a non-zero RHS means the system is inconsistent.
+	for r := 0; r < m; r++ {
+		allZero := true
+		for c := 0; c < n; c++ {
+			if !matrix[r][c].isZero() {
+				allZero = false
+				break
+			}
+		}
+		if allZero && !rhs[r].isZero() {
+			return matrix, rhs, pivotCols, false
+		}
+	}
+
+	return matrix, rhs, pivotCols, true
+}
+
 func solveJoltages(target joltages, buttons []button) int {
-	fmt.Println("solving for", target)
-
-	var tgt [10]int
-	copy(tgt[:], target)
-
-	equal := func(a [10]int) bool {
-		for i := range len(tgt) {
-			if a[i] != tgt[i] {
-				return false
-			}
-		}
-
-		return true
+	if len(target) == 0 {
+		return 0
 	}
 
-	greater := func(a [10]int) bool {
-		for i := range len(tgt) {
-			if a[i] > tgt[i] {
-				return true
-			}
-		}
-
-		return false
+	// Precompute a tight upper bound for each button's presses.
+	type buttonInfo struct {
+		btn      button
+		maxPress int
 	}
 
-	var queue []joltageState
-	seenJoltages := make(map[[10]int]struct{})
-
-	for _, button := range buttons {
-		result := joltageState{round: 0}
-
-		for _, val := range button {
-			result.vals[val]++
+	infos := make([]buttonInfo, len(buttons))
+	for i, b := range buttons {
+		maxPress := int(^uint(0) >> 1)
+		for _, idx := range b {
+			if target[idx] < maxPress {
+				maxPress = target[idx]
+			}
 		}
-
-		queue = append(queue, result)
-
-		seenJoltages[result.vals] = struct{}{}
+		if maxPress == int(^uint(0)>>1) {
+			maxPress = 0
+		}
+		infos[i] = buttonInfo{btn: b, maxPress: maxPress}
 	}
 
-	for head := 0; head < len(queue); head++ {
-		current := queue[head]
+	slices.SortFunc(infos, func(a, b buttonInfo) int {
+		if a.maxPress != b.maxPress {
+			return b.maxPress - a.maxPress
+		}
+		return len(b.btn) - len(a.btn)
+	})
 
-		for _, button := range buttons {
-			nextResult := joltageState{
-				vals:  current.vals,
-				round: current.round + 1,
-			}
-
-			for _, val := range button {
-				nextResult.vals[val]++
-			}
-
-			if equal(nextResult.vals) {
-				return nextResult.round
-			}
-
-			if _, ok := seenJoltages[nextResult.vals]; ok {
-				continue
-			}
-
-			if greater(nextResult.vals) {
-				continue
-			}
-
-			queue = append(queue, nextResult)
-
-			seenJoltages[nextResult.vals] = struct{}{}
+	// Build the button-position matrix (rows = positions, cols = buttons).
+	m := len(target)
+	k := len(infos)
+	matrix := make([][]frac, m)
+	zero := newFrac(0, 1)
+	for i := range matrix {
+		matrix[i] = make([]frac, k)
+		for j := range matrix[i] {
+			matrix[i][j] = zero
+		}
+	}
+	for col, info := range infos {
+		for _, idx := range info.btn {
+			matrix[idx][col] = newFrac(1, 1)
 		}
 	}
 
-	return -1
+	rhs := make([]frac, m)
+	for i, v := range target {
+		rhs[i] = newFrac(int64(v), 1)
+	}
+
+	// Reduce to RREF so we can separate forced vs free variables.
+	rrefMatrix, rrefRHS, pivotCols, ok := rref(matrix, rhs)
+	if !ok {
+		return -1
+	}
+
+	pivotSet := make(map[int]struct{}, len(pivotCols))
+	for _, col := range pivotCols {
+		pivotSet[col] = struct{}{}
+	}
+	var freeCols []int
+	for col := 0; col < k; col++ {
+		if _, ok := pivotSet[col]; !ok {
+			freeCols = append(freeCols, col)
+		}
+	}
+
+	// Convert each pivot row into integer coefficients by clearing denominators.
+	type rowEq struct {
+		pivotCol int
+		denom    int64
+		coeffs   []int64
+		constNum int64
+	}
+
+	rowEqs := make([]rowEq, len(pivotCols))
+	for r := 0; r < len(pivotCols); r++ {
+		den := int64(1)
+		den = lcm(den, rrefRHS[r].den)
+
+		for _, col := range freeCols {
+			den = lcm(den, rrefMatrix[r][col].den)
+		}
+
+		coeffs := make([]int64, len(freeCols))
+		for i, col := range freeCols {
+			coeffs[i] = rrefMatrix[r][col].num * (den / rrefMatrix[r][col].den)
+		}
+
+		rowEqs[r] = rowEq{
+			pivotCol: pivotCols[r],
+			denom:    den,
+			coeffs:   coeffs,
+			constNum: rrefRHS[r].num * (den / rrefRHS[r].den),
+		}
+	}
+
+	maxPresses := make([]int64, k)
+	for i, info := range infos {
+		maxPresses[i] = int64(info.maxPress)
+	}
+
+	best := int64(^uint64(0) >> 1)
+	freeVals := make([]int64, len(freeCols))
+
+	// Enumerate free variables within bounds, compute forced values, keep min sum.
+	var dfs func(idx int, sum int64)
+	dfs = func(idx int, sum int64) {
+		if sum >= best {
+			return
+		}
+		if idx == len(freeCols) {
+			total := sum
+			for _, eq := range rowEqs {
+				num := eq.constNum
+				for i, coeff := range eq.coeffs {
+					num -= coeff * freeVals[i]
+				}
+				// Skip if the forced value is not an integer.
+				if num%eq.denom != 0 {
+					return
+				}
+				val := num / eq.denom
+				if val < 0 {
+					return
+				}
+				if val > maxPresses[eq.pivotCol] {
+					return
+				}
+				total += val
+				if total >= best {
+					return
+				}
+			}
+			if total < best {
+				best = total
+			}
+			return
+		}
+
+		col := freeCols[idx]
+		maxVal := maxPresses[col]
+		for v := int64(0); v <= maxVal; v++ {
+			freeVals[idx] = v
+			dfs(idx+1, sum+v)
+		}
+	}
+
+	dfs(0, 0)
+	if best == int64(^uint64(0)>>1) {
+		return -1
+	}
+	return int(best)
 }
 
 func solveLights(target lights, buttons []button) int {

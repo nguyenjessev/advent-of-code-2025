@@ -70,6 +70,28 @@ func TestSolveLights(t *testing.T) {
 	}
 }
 
+func TestSolveJoltagesInputTest(t *testing.T) {
+	file, err := os.Open("input_test.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lines := readFile(file)
+	sum := 0
+	var results []int
+	for _, line := range lines {
+		_, b, j := machineComponents(line)
+		got := solveJoltages(j, b)
+		results = append(results, got)
+		sum += got
+	}
+
+	want := 33
+	if sum != want {
+		t.Fatalf("got %d want %d per-line %v", sum, want, results)
+	}
+}
+
 func TestApplyLights(t *testing.T) {
 	l := lights{false, false, false, false}
 	b := button{0, 1, 2}
